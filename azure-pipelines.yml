@@ -1,42 +1,58 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
+trigger:
+- main
 
-name: CI/CD Pipeline
-
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
+pool:
+  vmImage: 'ubuntu-latest'
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+- job: Build
+  displayName: 'Build'
+  steps:
+  - checkout: self
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+  # Build steps
+  - script: |
+      # Commands to build your project
+    displayName: 'Build'
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '14'
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: drop'
+    inputs:
+      PathtoPublish: '$(System.DefaultWorkingDirectory)'
+      ArtifactName: 'drop'
 
-    - name: Install dependencies
-      run: npm install
+- job: Deploy
+  displayName: 'Deploy to staging'
+  dependsOn: Build
+  steps:
+  - checkout: self
 
-    - name: Build
-      run: npm run build
+  # Deployment steps
+  - script: |
+      # Commands to deploy your application
+    displayName: 'Deploy to staging'
 
-    - name: Test
-      run: npm test
-
-    - name: Deploy to staging
-      run: |
-        # Add your deployment steps here
-        # This could involve copying artifacts to a staging environment
-        # Or deploying to a staging server
-
+  # Notification task on failure
+  - script: |
+      curl -X POST -H "Content-Type: application/json" -d '{
+        "type": "message",
+        "attachments": [
+          {
+            "contentType": "application/vnd.microsoft.card.adaptive",
+            "content": {
+              "type": "AdaptiveCard",
+              "body": [
+                {
+                  "type": "TextBlock",
+                  "text": "Deployment to staging failed! Check the pipeline logs for details.",
+                  "wrap": true
+                }
+              ],
+              "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+              "version": "1.2"
+            }
+          }
+        ]
+      }' "https://teams.microsoft.com/l/team/19%3A5IWmdyIDR8hfWwOUsx3A6QAhMauukb6O7bmczKTUXsA1%40thread.tacv2/conversations?groupId=76933b95-aa4e-479e-a6f8-d4122f92e4d6&tenantId=f5ea3467-a1df-4d7e-a894-9a0c66d9b19e"
+    displayName: 'Send Teams Notification'
+    condition: failed()
